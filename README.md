@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # 🏥 Hospital Search System
 
 A secure, AI-powered hospital search system that combines **semantic search** with **dynamic access control** to ensure only authorized personnel can access sensitive patient data.
