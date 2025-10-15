@@ -59,7 +59,35 @@ const requireRole = (allowedRoles) => {
       });
     }
 
-    if (!allowedRoles.includes(req.user.role)) {
+    // Map internal roles to Permit.io roles for checking
+    const roleMapping = {
+      'hospital_admin': 'admin',
+      'department_head': 'doctor',
+      'attending_physician': 'doctor',
+      'resident_doctor': 'doctor',
+      'registered_nurse': 'nurse',
+      'nurse_practitioner': 'nurse',
+      'lab_technician': 'nurse',
+      'radiologist': 'doctor',
+      'pharmacist': 'nurse',
+      'temp_staff': 'temporary_staff',
+      // Also support direct Permit.io role names
+      'admin': 'admin',
+      'doctor': 'doctor',
+      'nurse': 'nurse',
+      'temporary_staff': 'temporary_staff'
+    };
+
+    const userRole = req.user.role;
+    const mappedRole = roleMapping[userRole] || userRole;
+
+    // Check if user's role (or its mapped equivalent) is in allowed roles
+    const hasAccess = allowedRoles.some(allowedRole => {
+      const mappedAllowedRole = roleMapping[allowedRole] || allowedRole;
+      return userRole === allowedRole || mappedRole === mappedAllowedRole;
+    });
+
+    if (!hasAccess) {
       return res.status(403).json({
         error: {
           message: 'Insufficient permissions',

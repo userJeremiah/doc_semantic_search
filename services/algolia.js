@@ -22,7 +22,9 @@ class AlgoliaService {
       
       console.log('🧪 Using mock Algolia client for testing');
     } else {
-      // Production Algolia client
+      // Production Algolia client (v5 API)
+      this.indexName = process.env.ALGOLIA_INDEX_NAME || 'hospital_patient_records';
+      
       this.client = algoliasearch(
         process.env.ALGOLIA_APP_ID,
         process.env.ALGOLIA_API_KEY
@@ -33,11 +35,8 @@ class AlgoliaService {
         process.env.ALGOLIA_ADMIN_KEY
       );
       
-      this.index = this.client.initIndex(this.indexName);
-      this.adminIndex = this.adminClient.initIndex(this.indexName);
+      console.log(`🔍 Connected to Algolia index: ${this.indexName}`);
     }
-    
-    this.indexName = process.env.ALGOLIA_INDEX_NAME || 'hospital_patient_records';
   }
 
   /**
@@ -48,103 +47,78 @@ class AlgoliaService {
       console.log('🔍 Configuring Algolia index for healthcare search...');
 
       // Configure index settings optimized for healthcare data
-      await this.adminIndex.setSettings({
-        // Searchable attributes with priority order
-        searchableAttributes: [
-          'patient_name',
-          'patient_id', 
-          'medical_record_number',
-          'diagnosis',
-          'doctor_name',
-          'department',
-          'procedure_name',
-          'medication_name',
-          'lab_test_name',
-          'notes',
-          'symptoms'
-        ],
-        
-        // Attributes for faceted search and filtering
-        attributesForFaceting: [
-          'department',
-          'record_type',
-          'doctor_name',
-          'date_range',
-          'status',
-          'priority_level',
-          'patient_age_group',
-          'gender',
-          'insurance_type'
-        ],
-        
-        // Custom ranking to prioritize recent and relevant records
-        customRanking: [
-          'desc(priority_score)',
-          'desc(timestamp)',
-          'desc(relevance_score)'
-        ],
-        
-        // Highlighting for search results
-        attributesToHighlight: [
-          'patient_name',
-          'diagnosis',
-          'doctor_name',
-          'notes',
-          'symptoms'
-        ],
-        
-        // Attributes to retrieve in search results
-        attributesToRetrieve: [
-          'objectID',
-          'patient_id',
-          'patient_name',
-          'medical_record_number',
-          'record_type',
-          'department',
-          'doctor_name',
-          'date_created',
-          'last_updated',
-          'diagnosis',
-          'status',
-          'priority_level',
-          'summary'
-        ],
-        
-        // Typo tolerance for medical terms
-        typoTolerance: {
-          minWordSizeForTypos: {
-            oneTypo: 4,
-            twoTypos: 8
-          }
-        },
-        
-        // Advanced settings
-        hitsPerPage: 20,
-        maxValuesPerFacet: 100,
-        
-        // Synonyms for medical terms
-        synonyms: [
-          {
-            type: 'synonym',
-            synonyms: ['heart attack', 'myocardial infarction', 'MI', 'cardiac arrest']
-          },
-          {
-            type: 'synonym', 
-            synonyms: ['diabetes', 'diabetes mellitus', 'DM', 'diabetic']
-          },
-          {
-            type: 'synonym',
-            synonyms: ['pneumonia', 'lung infection', 'respiratory infection']
-          },
-          {
-            type: 'synonym',
-            synonyms: ['CT scan', 'computed tomography', 'CAT scan']
-          },
-          {
-            type: 'synonym',
-            synonyms: ['MRI', 'magnetic resonance imaging', 'MR scan']
-          }
-        ]
+      await this.adminClient.setSettings({
+        indexName: this.indexName,
+        indexSettings: {
+          // Searchable attributes with priority order
+          searchableAttributes: [
+            'patient_name',
+            'patient_id', 
+            'medical_record_number',
+            'diagnosis',
+            'doctor_name',
+            'department',
+            'procedure_name',
+            'medication_name',
+            'lab_test_name',
+            'notes',
+            'symptoms'
+          ],
+          
+          // Attributes for faceted search and filtering
+          attributesForFaceting: [
+            'department',
+            'record_type',
+            'doctor_name',
+            'date_range',
+            'status',
+            'priority_level',
+            'patient_age_group',
+            'gender',
+            'insurance_type'
+          ],
+          
+          // Custom ranking to prioritize recent and relevant records
+          customRanking: [
+            'desc(priority_score)',
+            'desc(timestamp)',
+            'desc(relevance_score)'
+          ],
+          
+          // Highlighting for search results
+          attributesToHighlight: [
+            'patient_name',
+            'diagnosis',
+            'doctor_name',
+            'notes',
+            'symptoms'
+          ],
+          
+          // Attributes to retrieve in search results
+          attributesToRetrieve: [
+            'objectID',
+            'patient_id',
+            'patient_name',
+            'medical_record_number',
+            'record_type',
+            'department',
+            'doctor_name',
+            'date_created',
+            'last_updated',
+            'diagnosis',
+            'status',
+            'priority_level',
+            'summary'
+          ],
+          
+          // Typo tolerance for medical terms
+          minWordSizefor1Typo: 4,
+          minWordSizefor2Typos: 8,
+          
+          // Advanced settings
+          hitsPerPage: 20,
+          maxValuesPerFacet: 100
+        }
       });
 
       console.log('✅ Algolia index configured successfully');
@@ -200,7 +174,10 @@ class AlgoliaService {
         _sensitivity_level: record.sensitivityLevel || 'normal'
       };
 
-      await this.adminIndex.saveObject(searchableRecord);
+      await this.adminClient.saveObject({
+        indexName: this.indexName,
+        body: searchableRecord
+      });
       console.log(`✅ Indexed record: ${record.id}`);
       return true;
     } catch (error) {
@@ -245,7 +222,10 @@ class AlgoliaService {
         _sensitivity_level: record.sensitivityLevel || 'normal'
       }));
 
-      await this.adminIndex.saveObjects(searchableRecords);
+      await this.adminClient.saveObjects({
+        indexName: this.indexName,
+        objects: searchableRecords
+      });
       console.log(`✅ Batch indexed ${records.length} records`);
       return true;
     } catch (error) {
@@ -286,7 +266,10 @@ class AlgoliaService {
         removeStopWords: true
       };
 
-      const results = await this.index.search(searchParams);
+      const results = await this.client.searchSingleIndex({
+        indexName: this.indexName,
+        searchParams
+      });
       
       return {
         hits: results.hits,
@@ -307,11 +290,14 @@ class AlgoliaService {
    */
   async getSuggestions(query, type = 'all') {
     try {
-      const suggestions = await this.index.search({
-        query,
-        hitsPerPage: 10,
-        attributesToRetrieve: this.getSuggestionAttributes(type),
-        typoTolerance: false
+      const suggestions = await this.client.searchSingleIndex({
+        indexName: this.indexName,
+        searchParams: {
+          query,
+          hitsPerPage: 10,
+          attributesToRetrieve: this.getSuggestionAttributes(type),
+          typoTolerance: false
+        }
       });
 
       return suggestions.hits.map(hit => ({

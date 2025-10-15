@@ -18,9 +18,10 @@ class SecureSearchService {
       const searchResults = await this.algoliaService.searchRecords(query, {
         ...options,
         // Apply department filter based on user's department unless they're admin
+        // Map internal roles to Permit roles for comparison
         filters: {
           ...options.filters,
-          ...(user.role !== 'hospital_admin' && { department: user.department })
+          ...(!['hospital_admin', 'admin'].includes(user.role) && { department: user.department })
         }
       });
 
@@ -79,7 +80,10 @@ class SecureSearchService {
             id: result.objectID,
             department: result._department,
             patientId: result._patient_id,
-            sensitivityLevel: result._sensitivity_level
+            sensitivityLevel: result._sensitivity_level,
+            createdAt: result.date_created,
+            lastUpdatedBy: result.last_updated_by,
+            isAnonymized: result.is_anonymized || false
           };
 
           const hasPermission = await this.permitService.checkPermission(
