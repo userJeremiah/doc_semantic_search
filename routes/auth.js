@@ -10,10 +10,11 @@ const permitService = new PermitService();
 
 // In a real application, you would use a proper database
 // For demo purposes, we'll use the sample data with hashed passwords
-const users = sampleUsers.map(user => ({
-  ...user,
-  password: bcrypt.hashSync('password123', 10) // Default password for demo
-}));
+const users = sampleUsers.map(user => {
+  // Keep the User instance to preserve getters
+  user.password = bcrypt.hashSync('password123', 10);
+  return user;
+});
 
 /**
  * @route POST /api/auth/login

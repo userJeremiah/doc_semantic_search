@@ -315,35 +315,104 @@ class PermitService {
   }
 
   /**
+   * Map internal role names to Permit.io role keys
+   */
+  mapRoleToPermit(internalRole) {
+    const roleMapping = {
+      'hospital_admin': 'admin',
+      'department_head': 'doctor', // Department heads have doctor-level access
+      'attending_physician': 'doctor',
+      'resident_doctor': 'doctor',
+      'registered_nurse': 'nurse',
+      'nurse_practitioner': 'nurse',
+      'lab_technician': 'nurse', // Map to nurse for now, or create specific role
+      'radiologist': 'doctor',
+      'pharmacist': 'nurse',
+      'temp_staff': 'temporary_staff'
+    };
+    return roleMapping[internalRole] || internalRole;
+  }
+
+  /**
+   * Map internal action names to Permit.io permission format
+   */
+  mapActionToPermit(action, resourceType) {
+    // Your Permit.io uses resource:action format like "patient_records:view"
+    // Convert generic actions to your specific permissions
+    const actionMapping = {
+      'read': 'view',
+      'write': 'update',
+      'search': 'search',
+      'export': 'export',
+      'delete': 'delete',
+      'create': 'create',
+      'audit': 'auditquery'
+    };
+    return actionMapping[action] || action;
+  }
+
+  /**
+   * Map internal resource types to Permit.io resource keys
+   */
+  mapResourceToPermit(resourceType) {
+    const resourceMapping = {
+      'patient_record': 'patient_records',
+      'lab_result': 'patient_records', // Lab results are part of patient records
+      'imaging_study': 'patient_records',
+      'medication_record': 'patient_records',
+      'vital_signs': 'patient_records',
+      'discharge_summary': 'patient_records'
+    };
+    return resourceMapping[resourceType] || resourceType;
+  }
+
+  /**
    * Check if user has permission to access a resource
    */
   async checkPermission(user, action, resource, context = {}) {
     try {
+      // Map role to Permit.io format
+      const permitRole = this.mapRoleToPermit(user.role);
+      
+      // Map resource type to Permit.io format
+      const permitResourceType = this.mapResourceToPermit(resource.type);
+      
+      // Map action to Permit.io permission format
+      const permitAction = this.mapActionToPermit(action, permitResourceType);
+      
       const decision = await this.permit.check(
         {
           key: user.id,
           attributes: {
             email: user.email,
-            role: user.role,
+            role: permitRole,
             department: user.department,
             shift_active: this.isShiftActive(user),
             access_expiry: user.accessExpiry,
             assigned_patients: user.assignedPatients || []
           }
         },
-        action,
+        permitAction,
         {
-          type: resource.type,
+          type: permitResourceType,
           key: resource.id,
           attributes: {
             department: resource.department,
-            patient_id: resource.patientId,
-            sensitivity_level: resource.sensitivityLevel || 'normal'
+            assigned_doctor_id: user.id, // For doctor-patient matching
+            senstivity_level: resource.sensitivityLevel || 'normal', // Match your typo
+            created_at: resource.createdAt,
+            last_updated_by: resource.lastUpdatedBy,
+            is_anonymized: resource.isAnonymized || false
           }
         }
       );
 
-      return decision;
+      // Normalize the decision into a boolean. The mock returns { allow: true }
+      // while a live SDK may return a boolean or an object. Return true only
+      // when the decision explicitly allows access.
+      if (decision === true) return true;
+      if (decision && typeof decision === 'object' && decision.allow === true) return true;
+      return false;
     } catch (error) {
       console.error('❌ Error checking permission:', error);
       return false;
